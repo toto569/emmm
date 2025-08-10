@@ -2,15 +2,214 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>视频播放页面</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>优化后的视频播放器</title>
+    <style>
+        /* 基础样式重置 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        /* 视频容器 */
+        .video-container {
+            width: 100%;
+            max-width: 800px; /* 在大屏幕上限制最大宽度 */
+            position: relative;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        /* 视频元素 */
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* 自定义控制条 */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            opacity: 0; /* 默认隐藏 */
+            transition: opacity 0.3s;
+            z-index: 2147483647;
+        }
+
+        /* 视频容器在悬停或获得焦点时显示控制条 */
+        .video-container:hover .custom-controls,
+        .video-container:focus-within .custom-controls {
+            opacity: 1;
+        }
+
+
+        .custom-controls button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            flex-grow: 1;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.3);
+            margin: 0 10px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress {
+            height: 100%;
+            width: 0;
+            background-color: #ff5722;
+        }
+        
+        /* 时间显示 */
+        .time-display {
+            color: white;
+            font-size: 14px;
+        }
+
+    </style>
 </head>
 <body>
 
-    <video controls width="640" height="360">
-        <source src="yans.mp4" type="video/mp4">
-        您的浏览器不支持 HTML5 video 标签。
-    </video>
+    <div class="video-container" id="videoContainer">
+        <video id="myVideo"
+               poster="your-poster-image.jpg"
+               preload="metadata">
+            <source src="yans.mp4" type="video/mp4">
+            <!-- 添加其他视频格式以提高兼容性 -->
+            <!-- <source src="yans.webm" type="video/webm"> -->
+            <track label="中文" kind="subtitles" srclang="zh" src="subtitles-zh.vtt" default>
+            <track label="English" kind="subtitles" srclang="en" src="subtitles-en.vtt">
+            您的浏览器不支持 HTML5 video 标签。
+        </video>
 
+        <div class="custom-controls" id="customControls">
+            <button id="playPauseBtn">▶</button>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+            <button id="fullScreenBtn">⛶</button>
+        </div>
+    </div>
+
+    <script>
+        const videoContainer = document.getElementById('videoContainer');
+        const video = document.getElementById('myVideo');
+        const customControls = document.getElementById('customControls');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progress = document.getElementById('progress');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const fullScreenBtn = document.getElementById('fullScreenBtn');
+
+        let controlsTimeout;
+
+        // 隐藏控制条的函数
+        const hideControls = () => {
+            if (video.paused) return; // 如果视频是暂停的，则不隐藏
+            customControls.style.opacity = '0';
+        }
+
+        // 显示控制条并设置延时隐藏
+        const showControls = () => {
+            customControls.style.opacity = '1';
+            clearTimeout(controlsTimeout);
+            controlsTimeout = setTimeout(hideControls, 3000); // 3秒后隐藏
+        }
+
+        // 播放/暂停
+        function togglePlayPause() {
+            if (video.paused || video.ended) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+
+        // 根据播放状态更新按钮图标
+        function updatePlayIcon() {
+            if (video.paused || video.ended) {
+                playPauseBtn.textContent = '▶';
+                showControls(); // 暂停时也显示控制条
+            } else {
+                playPauseBtn.textContent = '❚❚';
+                controlsTimeout = setTimeout(hideControls, 3000); // 播放时3秒后隐藏
+            }
+        }
+
+
+        // 更新进度条
+        function updateProgress() {
+            if (video.duration) {
+                const percent = (video.currentTime / video.duration) * 100;
+                progress.style.width = `${percent}%`;
+                timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+            }
+        }
+
+        // 跳转到指定时间
+        function seek(e) {
+            const rect = progressBar.getBoundingClientRect();
+            const pos = (e.pageX - rect.left) / progressBar.offsetWidth;
+            video.currentTime = pos * video.duration;
+        }
+
+        // 格式化时间显示
+        function formatTime(time) {
+            const minutes = Math.floor(time / 60);
+            const seconds = Math.floor(time % 60);
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        
+        // 全屏切换
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                videoContainer.requestFullscreen().catch(err => {
+                    alert(`进入全屏模式失败: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // 事件监听
+        playPauseBtn.addEventListener('click', togglePlayPause);
+        video.addEventListener('click', togglePlayPause); // 点击视频区域也能播放/暂停
+        
+        video.addEventListener('play', updatePlayIcon);
+        video.addEventListener('pause', updatePlayIcon);
+        video.addEventListener('ended', updatePlayIcon);
+
+        video.addEventListener('timeupdate', updateProgress);
+        video.addEventListener('loadedmetadata', updateProgress);
+        progressBar.addEventListener('click', seek);
+        fullScreenBtn.addEventListener('click', toggleFullScreen);
+
+        // 移动端交互：显示/隐藏控制条
+        videoContainer.addEventListener('mousemove', showControls);
+        videoContainer.addEventListener('touchstart', showControls, { passive: true });
+
+    </script>
 </body>
 </html>
